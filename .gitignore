@@ -1,0 +1,6 @@
+work/
+out/
+*.qcow2
+*.iso
+*.img
+*.log

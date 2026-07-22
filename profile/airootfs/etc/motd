@@ -1,0 +1,14 @@
+Cairn  ·  security-hardened Arch live environment
+   dev preview — not for production use
+
+The installer starts automatically on login.
+If it exits or you need it again:   cairn-install
+
+Network:
+  Wi-Fi          →  iwctl
+  Mobile (WWAN)  →  mmcli
+  Ethernet/WLAN/WWAN via DHCP works automatically.
+
+Drop to a shell any time with Ctrl-C, then relaunch with cairn-install.
+
+[41m [41m [41m [40m [44m [40m [41m [46m [45m [41m [46m [43m [41m [44m [45m [40m [44m [40m [41m [44m [41m [41m [46m [42m [41m [44m [43m [41m [45m [40m [40m [44m [40m [41m [44m [42m [41m [46m [44m [41m [46m [47m [0m
