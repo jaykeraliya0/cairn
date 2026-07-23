@@ -4,3 +4,5 @@ out/
 *.iso
 *.img
 *.log
+*.fd
+/profile/airootfs/root/cairn-installer/
