@@ -22,4 +22,6 @@ file_permissions=(
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/Installation_guide"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
+  ["/etc/skel/.config/hypr/scripts/screenshot.sh"]="0:0:755"
+  ["/etc/skel/.config/waybar/scripts/powermenu.sh"]="0:0:755"
 )

@@ -1,0 +1,177 @@
+/* Cairn default waybar style -- Last of Us theme.
+   Colors match ~/.config/hypr/colors.conf; see the comment there. */
+
+* {
+  /* Must be a family from target-packages.x86_64 -- quoted so GTK keeps
+     the whole multi-word name. Propo = proportional Nerd Font variant. */
+  font-family: "JetBrainsMono Nerd Font Propo", sans-serif;
+  font-size: 13px;
+}
+
+@define-color highlight  #f7c594;
+@define-color primary    #fffdf5;
+
+@define-color dark-9  #0a0a09;
+@define-color dark-8  #141311;
+@define-color dark-7  #1a1815;
+@define-color dark-6  #352b21;
+
+@define-color danger  #f06060;
+@define-color warning #f7c594;
+@define-color success #8a9a5b;
+@define-color info    #8fa89e;
+
+@define-color blue           #7d8f9c;
+@define-color blue-dark      #9d7f55;
+@define-color cyan           #8fa89e;
+@define-color cyan-bright    #a8c0b6;
+@define-color magenta        #b08a9c;
+@define-color magenta2       #c9a3b3;
+@define-color purple         #b08a9c;
+@define-color teal           #8fa89e;
+@define-color orange         #e08b4a;
+
+@keyframes waybar-blink {
+  to {
+    opacity: 0.2;
+  }
+}
+
+button {
+  border: none;
+  background: transparent;
+  color: @primary;
+}
+
+button:hover {
+  background-color: inherit;
+  border-radius: 0;
+  box-shadow: none;
+  font-weight: inherit;
+  font: inherit;
+}
+
+window#waybar {
+  background-color: @dark-9;
+  color: @primary;
+}
+
+#custom-launcher {
+  color: @dark-9;
+  border-radius: 8px;
+  padding: 3px 8px;
+  background: @highlight;
+  margin: 5px 5px 5px 5px;
+}
+
+#workspaces button {
+  all: initial;
+  padding: 0 6px;
+  margin: 0 1.5px;
+  min-width: 9px;
+}
+
+#workspaces button.empty {
+  opacity: 0.5;
+}
+
+#workspaces button.urgent {
+  animation-name: waybar-blink;
+  animation-duration: 0.5s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+#window {
+  background: transparent;
+  padding: 3px 8px;
+}
+
+#tray,
+#backlight,
+#pulseaudio,
+#battery,
+#bluetooth,
+#network,
+#cpu,
+#memory,
+#custom-power {
+  border-radius: 8px;
+  padding: 3px 8px;
+  background: @dark-8;
+  margin: 5px 7px 5px 0px;
+}
+
+#tray {
+  color: @blue-dark;
+}
+
+#backlight {
+  color: @orange;
+}
+
+#pulseaudio {
+  color: @cyan;
+}
+
+#battery {
+  color: @magenta2;
+}
+
+#bluetooth {
+  color: @blue;
+}
+
+#network {
+  color: @teal;
+}
+
+#network.speed {
+  color: @warning;
+}
+
+#cpu {
+  color: @purple;
+}
+
+#memory {
+  color: @success;
+}
+
+#custom-power {
+  color: @danger;
+}
+
+tooltip {
+  background-color: @dark-9;
+  border-radius: 5px;
+}
+
+tooltip label {
+  color: @primary;
+}
+
+menu {
+  background-color: @dark-9;
+  border: 1px solid @dark-6;
+  border-radius: 5px;
+  padding: 4px;
+}
+
+menu menuitem {
+  color: @primary;
+  border-radius: 4px;
+  padding: 4px 8px;
+  min-height: 0;
+}
+
+menu menuitem:hover {
+  background-color: @dark-8;
+  color: @highlight;
+}
+
+menu separator {
+  background-color: @dark-6;
+  margin: 4px 0;
+}

@@ -25,6 +25,18 @@ waybar
 rofi
 mako
 swaybg
+hyprlock
+hypridle
+
+# Desktop utilities used by the default Hyprland keybinds/config
+brightnessctl
+grim
+slurp
+wl-clipboard
+
+# Fonts and icons used by the default waybar/rofi/mako/alacritty configs
+ttf-jetbrains-mono-nerd
+papirus-icon-theme
 
 # Audio
 pipewire

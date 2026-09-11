@@ -1,0 +1,166 @@
+// -*- mode: jsonc -*-
+{
+    "layer": "top",
+    "height": 30,
+    "modules-left": [
+        "custom/launcher",
+        "hyprland/workspaces",
+        "hyprland/submap",
+        "hyprland/window"
+    ],
+    "modules-center": [
+        "clock"
+    ],
+    "modules-right": [
+        "tray",
+        "backlight",
+        "pulseaudio",
+        "battery",
+        "bluetooth",
+        "network",
+        "network#speed",
+        "cpu",
+        "memory",
+        "custom/power"
+    ],
+    "custom/launcher": {
+        "format": "",
+        "on-click": "exec rofi -show drun"
+    },
+    "hyprland/workspaces": {
+        "on-click": "activate",
+        "format": "{icon}",
+        "format-icons": {
+            "default": "",
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "4",
+            "5": "5",
+            "6": "6",
+            "7": "7",
+            "8": "8",
+            "9": "9",
+            "10": "0",
+            "active": "󱓻"
+        },
+        "persistent-workspaces": {
+            "1": [],
+            "2": [],
+            "3": [],
+            "4": [],
+            "5": []
+        }
+    },
+    "hyprland/submap": {
+        "format": "{name}",
+        "tooltip-format": "{name}\n{keybinds}"
+    },
+    "hyprland/window": {
+        "format": "{title}",
+        "max-length": 50
+    },
+    "tray": {
+        "icon-size": 13,
+        "spacing": 8
+    },
+    "backlight": {
+        "format": "{percent}% {icon}",
+        "format-icons": [
+            "󰃞",
+            "󰃟",
+            "󰃠"
+        ]
+    },
+    "pulseaudio": {
+        "format": "{volume}% {icon}",
+        "format-muted": "󰝟",
+        "format-icons": {
+            "default": [
+                "󰖀",
+                "󰕾"
+            ]
+        },
+        "on-click": "exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    },
+    "battery": {
+        "interval": 60,
+        "format": "{capacity}% {icon}",
+        "format-icons": {
+            "default": [
+                "󰂎",
+                "󰁺",
+                "󰁻",
+                "󰁼",
+                "󰁽",
+                "󰁾",
+                "󰁿",
+                "󰂀",
+                "󰂁",
+                "󰂂",
+                "󰁹"
+            ],
+            "charging": [
+                "󰢟",
+                "󰢜",
+                "󰂆",
+                "󰂇",
+                "󰂈",
+                "󰢝",
+                "󰂉",
+                "󰢞",
+                "󰂊",
+                "󰂋",
+                "󰂅"
+            ],
+            "full": "󰂅"
+        }
+    },
+    "custom/power": {
+        "format": "󰐥",
+        "tooltip": false,
+        "on-click": "~/.config/waybar/scripts/powermenu.sh"
+    },
+    "bluetooth": {
+        "format": "",
+        "format-disabled": "", // an empty format will hide the module
+        "format-connected": " {num_connections}",
+        "tooltip-format": "{controller_alias}\t{controller_address}",
+        "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}"
+    },
+    "cpu": {
+        "interval": 10,
+        "format": " {usage}%",
+        "max-length": 10
+    },
+    "memory": {
+        "interval": 10,
+        "format": " {percentage}%",
+        "tooltip-format": "{used:0.1f}G/{total:0.1f}G used"
+    },
+    "network": {
+        "format": "",
+        "format-wifi": "󰤨 {essid}",
+        "format-ethernet": "",
+        "format-disconnected": "󰤭",
+        "tooltip-format": "{ifname} via {gwaddr} 󰺷",
+        "tooltip-format-wifi": "{essid} ({signalStrength}%) 󰤨",
+        "tooltip-format-ethernet": "{ifname} ",
+        "tooltip-format-disconnected": "Disconnected",
+        "max-length": 50
+    },
+    "network#speed": {
+        "interval": 1,
+        "format": " {bandwidthDownBytes}   {bandwidthUpBytes}",
+        "format-disconnected": "",
+        "tooltip": false,
+        "max-length": 50
+    },
+    "clock": {
+        "interval": 1,
+        "format": "{:%a, %I:%M:%S %p}",
+        "max-length": 25,
+        "tooltip-format": "{:%A, %B %d, %Y}"
+    }
+}

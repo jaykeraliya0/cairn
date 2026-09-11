@@ -1,0 +1,46 @@
+# Cairn default Alacritty config -- Last of Us theme.
+# Colors match ~/.config/hypr/colors.conf; see the comment there.
+# UI apps (waybar/rofi/mako) use the "Outfit" display font -- terminal/editor
+# fonts are deliberately left as a plain monospace face instead.
+
+[window]
+opacity = 0.95
+padding = { x = 8, y = 8 }
+
+[font]
+size = 11
+
+[font.normal]
+family = "JetBrainsMono Nerd Font"
+
+[colors.primary]
+background = "#1a1815"
+foreground = "#a89e8d"
+
+[colors.cursor]
+text = "#1a1815"
+cursor = "#fffdf5"
+
+[colors.selection]
+text = "CellForeground"
+background = "#23201e"
+
+[colors.normal]
+black   = "#23201e"
+red     = "#f06060"
+green   = "#8a9a5b"
+yellow  = "#f7c594"
+blue    = "#7d8f9c"
+magenta = "#b08a9c"
+cyan    = "#8fa89e"
+white   = "#a89e8d"
+
+[colors.bright]
+black   = "#503e28"
+red     = "#ff7a6b"
+green   = "#a3b56d"
+yellow  = "#ffd9a8"
+blue    = "#9db0bd"
+magenta = "#c9a3b3"
+cyan    = "#a8c0b6"
+white   = "#fffdf5"

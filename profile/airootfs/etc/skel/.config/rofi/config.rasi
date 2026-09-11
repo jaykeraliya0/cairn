@@ -1,0 +1,99 @@
+/* Cairn default rofi config -- Last of Us theme.
+   Colors match ~/.config/hypr/colors.conf; see the comment there. */
+
+* {
+    /* Pango font description; the family must be in target-packages.x86_64. */
+    c-font:        "JetBrainsMono Nerd Font Propo 13";
+    c-bg:          #1a1815f2;
+    c-bg-solid:    #1a1815;
+    c-fg:          #fffdf5;
+    c-fg-dim:      #fffdf580;
+    c-accent:      #f7c594;
+    c-selected-bg: #fffdf512;
+    c-border:      #fffdf5;
+
+    background-color: transparent;
+    text-color: @c-fg;
+    font: @c-font;
+}
+
+configuration {
+    modi: "drun";
+    show-icons: true;
+    icon-theme: "Papirus-Dark";
+    drun-display-format: "{name}";
+}
+
+window {
+    background-color: @c-bg;
+    border: 2px;
+    border-color: @c-border;
+    border-radius: 0px;
+    padding: 12px;
+    width: 480px;
+    location: center;
+    anchor: center;
+}
+
+mainbox {
+    spacing: 8px;
+    children: [ "inputbar", "listview" ];
+}
+
+inputbar {
+    background-color: @c-bg-solid;
+    text-color: @c-fg;
+    padding: 8px;
+    border-radius: 0px;
+    children: [ "entry" ];
+}
+
+entry {
+    placeholder: " Search...";
+    placeholder-color: @c-fg-dim;
+    background-color: transparent;
+    text-color: @c-fg;
+}
+
+listview {
+    background-color: transparent;
+    spacing: 0px;
+    lines: 6;
+    scrollbar: false;
+    fixed-height: false;
+}
+
+element {
+    padding: 8px;
+    border-radius: 0px;
+    children: [ "element-icon", "element-text" ];
+}
+
+element normal.normal,
+element normal.urgent,
+element normal.active,
+element alternate.normal,
+element alternate.urgent,
+element alternate.active {
+    background-color: transparent;
+    text-color: @c-fg;
+}
+
+element selected.normal,
+element selected.urgent,
+element selected.active {
+    background-color: @c-selected-bg;
+    text-color: @c-accent;
+}
+
+element-icon {
+    size: 18px;
+    margin: 0 8px 0 0;
+    background-color: transparent;
+}
+
+element-text {
+    text-color: inherit;
+    vertical-align: 0.5;
+    background-color: transparent;
+}
