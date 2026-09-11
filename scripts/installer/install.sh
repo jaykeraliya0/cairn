@@ -144,6 +144,9 @@ if [[ -n "${TARGET_SWAP_SIZE}" ]]; then
   cairn::create_swapfile "${TARGET_SWAP_SIZE}"
 fi
 
+cairn::log "Installing default user configuration into the target..."
+cairn::install_skel /etc/skel /mnt/etc/skel
+
 cairn::log "Configuring target system..."
 cairn::configure_chroot "${TARGET_HOSTNAME}" "${TARGET_ROOT_PASSWORD}" "${TARGET_USERNAME}" "${TARGET_USER_PASSWORD}"
 cairn::log "Chroot configuration complete."

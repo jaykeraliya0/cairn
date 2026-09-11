@@ -5,8 +5,6 @@
 # Source this file; do not execute it directly.
 
 # pacstrap the packages listed in a target package list file into /mnt.
-# Blank lines and comment lines (leading '#') are skipped, so the list file
-# can be commented for readability.
 # Usage: cairn::install_base_system /path/to/target-packages.x86_64
 cairn::install_base_system() {
   local packages_file="$1"
@@ -16,7 +14,7 @@ cairn::install_base_system() {
   fi
 
   local target_packages
-  mapfile -t target_packages < <(grep -vE '^\s*#|^\s*$' "${packages_file}")
+  mapfile -t target_packages < <(cairn::read_package_list "${packages_file}")
 
   pacstrap -K /mnt "${target_packages[@]}"
 }
@@ -39,6 +37,31 @@ cairn::create_swapfile() {
 
   btrfs filesystem mkswapfile --size "${swap_size}" /mnt/swapfile
   echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
+}
+
+# Copy a skeleton directory from the live environment into the target system.
+# `useradd -m` runs inside the chroot, so it copies the *target's* /etc/skel —
+# which pacstrap creates pristine from the `filesystem` package. Without this
+# step the Cairn dotfiles shipped in the ISO's /etc/skel never reach the
+# installed system and the new user lands on a stock Hyprland desktop.
+# A missing source is not fatal: the install still produces a working system,
+# just with upstream defaults.
+# Usage: cairn::install_skel /etc/skel /mnt/etc/skel
+cairn::install_skel() {
+  local src="$1"
+  local dest="$2"
+
+  if [[ ! -d "${src}" ]]; then
+    cairn::log "No skeleton directory at ${src}; the target user will get the default /etc/skel."
+    return 0
+  fi
+
+  mkdir -p "${dest}"
+  # The trailing /. copies the contents (dotfiles included) rather than the
+  # directory itself, and -a preserves modes — so the 0755 that
+  # profiledef.sh's file_permissions gives the helper scripts in the ISO
+  # carries through to the installed system.
+  cp -a "${src}/." "${dest}/"
 }
 
 # Configure the freshly pacstrapped system inside an arch-chroot: timezone,
