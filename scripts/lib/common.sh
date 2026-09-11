@@ -20,6 +20,15 @@ cairn::require_root() {
   fi
 }
 
+# Print the package names from a package list file, one per line. Drops blank
+# lines and both comment styles mkarchiso accepts (whole-line and trailing),
+# then trims surrounding whitespace — mkarchiso leaves that on, which would
+# otherwise reach pacman as part of the package name.
+# Usage: cairn::read_package_list /path/to/packages.x86_64
+cairn::read_package_list() {
+  sed '/^[[:blank:]]*#/d; s/#.*//; s/^[[:blank:]]*//; s/[[:blank:]]*$//; /^$/d' "$1"
+}
+
 # Prompt for a password twice (hidden input) and confirm they match.
 # Usage: cairn::prompt_password_confirmed "User" out_var_name
 cairn::prompt_password_confirmed() {
