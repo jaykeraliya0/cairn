@@ -1,3 +1,24 @@
+# Cairn live ISO package list — installed into the live environment only.
+# (The *target* system's list is scripts/installer/target-packages.x86_64.)
+#
+# Forked from archiso's releng profile. Last synced with archiso 90:
+#   /usr/share/archiso/configs/releng/packages.x86_64
+#
+# Re-sync after an archiso upgrade, then update the version above:
+#   diff <(sed '/^[[:blank:]]*#/d;/^[[:blank:]]*$/d' profile/packages.x86_64) \
+#        <(sort /usr/share/archiso/configs/releng/packages.x86_64)
+#
+# Deltas from releng 90: none — the set below is identical to upstream's.
+# When Cairn intentionally adds or drops a package, list it here with the
+# reason so the next re-sync doesn't silently undo the decision.
+#
+# Historical note: broadcom-wl was dropped (from releng too) when it left the
+# official repos; only broadcom-wl-dkms remains, which would need dkms +
+# linux-headers in the ISO. airootfs/etc/modprobe.d/broadcom-wl.conf stays,
+# matching releng.
+#
+# mkarchiso strips '#' comments and blank lines from this file before pacstrap.
+
 alsa-utils
 amd-ucode
 arch-install-scripts
@@ -8,7 +29,6 @@ bcachefs-tools
 bind
 bolt
 brltty
-broadcom-wl
 btrfs-progs
 clonezilla
 cloud-init
@@ -31,6 +51,7 @@ f2fs-tools
 fatresize
 foot-terminfo
 fsarchiver
+ghostty-terminfo
 gpart
 gpm
 gptfdisk
@@ -44,6 +65,7 @@ iw
 iwd
 jfsutils
 kitty-terminfo
+kmscon-terminfo
 ldns
 less
 lftp
@@ -75,7 +97,7 @@ ndisc6
 nfs-utils
 nilfs-utils
 nmap
-ntfs-3g
+ntfsprogs
 nvme-cli
 open-iscsi
 open-vm-tools
