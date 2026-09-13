@@ -1,0 +1,19 @@
+# Nvidia's driver packages. They ship in a small side repository next to the
+# system image instead of inside it: about 2.4 GiB installed, and needed only on
+# machines with an Nvidia card.
+#
+# build.sh resolves each driver flavour against the image's own package
+# database, so the repository holds only what the image lacks. The installer
+# installs one flavour, from that repository, offline, and only when the user
+# chose an Nvidia driver.
+#
+# Keep in step with installer/sys/gpu.go (NvidiaPackages), which picks the
+# flavour, and with build_nvidia_repo in build.sh, which resolves them.
+
+nvidia-open
+nvidia-open-dkms
+nvidia-utils
+egl-wayland
+
+# What lets DKMS rebuild nvidia-open-dkms on every kernel upgrade.
+linux-headers

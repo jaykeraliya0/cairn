@@ -1,0 +1,155 @@
+# Packages that make up the installed Cairn system (not the live ISO — see
+# profile/packages.x86_64 for that). One package per line; blank lines and
+# '#' comments are ignored.
+#
+# build.sh pacstraps exactly this set into a directory at build time and packs
+# the result into the system image (/usr/share/cairn/cairn-root.sfs) that the
+# installer extracts onto the disk. Nothing here is installed on the user's
+# machine by pacman — it arrives as files, already installed. Nvidia's drivers
+# are the one exception, and live in nvidia-packages.x86_64.
+
+# Base system
+base
+linux
+linux-firmware
+mkinitcpio
+
+# Filesystem tools needed on the installed system
+btrfs-progs
+
+# Basics
+sudo
+
+# Networking (services enabled in the chroot step)
+iwd
+networkmanager
+
+# Desktop (Hyprland + login manager, service enabled in the chroot step)
+hyprland
+sddm
+alacritty
+waybar
+rofi
+mako
+swaybg
+hyprlock
+hypridle
+
+# Desktop utilities used by the default Hyprland keybinds/config
+brightnessctl
+grim
+slurp
+wl-clipboard
+
+# Fonts and icons used by the default waybar/rofi/mako/alacritty configs
+ttf-jetbrains-mono-nerd
+papirus-icon-theme
+
+# Audio
+pipewire
+pipewire-alsa
+pipewire-pulse
+pipewire-jack
+pipewire-audio
+wireplumber
+
+# Authentication agent
+polkit
+hyprpolkitagent
+
+# Desktop portals. Without these the GTK file chooser never opens, so Firefox's
+# "upload a file" does nothing, and screen sharing and screen recording fail on
+# Hyprland outright.
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+xdg-utils
+
+# Applications
+firefox
+nautilus
+gvfs
+file-roller
+mpv
+imv
+fastfetch
+vim
+nano
+
+# Archive formats, so the file manager can actually open one
+unzip
+7zip
+
+# Backing the keybinds: SUPER+V is a cliphist history behind rofi, SUPER+SHIFT+V
+# is the audio mixer. Both are dead keys without these.
+cliphist
+pavucontrol
+
+# Media codecs, for anything that plays video or audio through GStreamer
+gst-plugins-base
+gst-plugins-good
+gst-plugins-bad
+gst-plugins-ugly
+gst-libav
+ffmpeg
+
+# Bluetooth. waybar already draws a bluetooth module; without these it has
+# nothing to talk to. The service is enabled in the chroot step.
+bluez
+bluez-utils
+blueman
+
+# Secrets. gnome-keyring stores the passwords Firefox and any libsecret client
+# ask for; the chroot step wires it into SDDM's PAM stack so the login password
+# unlocks it.
+gnome-keyring
+libsecret
+
+# Fonts. The desktop otherwise ships only JetBrains Mono Nerd, which would
+# leave Firefox rendering most of the web in a monospace fallback and emoji as
+# empty boxes. No CJK: noto-fonts-cjk is 189 MiB of download on its own — add
+# it here if you need those scripts.
+noto-fonts
+noto-fonts-emoji
+ttf-dejavu
+
+# Theming, so GTK and Qt applications both follow a dark theme instead of one
+# of them being blinding white. QT_QPA_PLATFORMTHEME is set in hyprland.lua.
+gnome-themes-extra
+adwaita-icon-theme
+nwg-look
+qt5ct
+qt6ct
+kvantum
+qt5-wayland
+qt6-wayland
+
+# Laptop hardware. sof-firmware is not part of linux-firmware and is what most
+# Intel laptops built since about 2019 need before their speakers make a sound.
+sof-firmware
+power-profiles-daemon
+
+# Development basics. base-devel is what any AUR helper needs to build with.
+git
+base-devel
+man-db
+man-pages
+openssh
+curl
+
+# CPU microcode for both vendors. Both belong in the image: mkinitcpio's
+# microcode hook embeds only the running CPU's firmware when the installer
+# builds the initramfs, so the other vendor's costs a few megabytes of disk
+# and nothing at boot.
+intel-ucode
+amd-ucode
+
+# Disk encryption. Always present, so an encrypted install needs nothing extra.
+cryptsetup
+
+# Userspace graphics drivers for Intel and AMD. Harmless on other hardware, and
+# as part of the image they cost nothing at install time. Nvidia is the
+# exception — see nvidia-packages.x86_64.
+mesa
+vulkan-intel
+intel-media-driver
+vulkan-radeon

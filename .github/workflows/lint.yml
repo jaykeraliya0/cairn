@@ -11,11 +11,28 @@ jobs:
         with:
           ignore_paths: profile work out
 
-  bats:
+  go:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: installer
     steps:
       - uses: actions/checkout@v4
-      - name: Install bats
-        run: sudo apt-get update && sudo apt-get install -y bats
-      - name: Run tests
-        run: bats tests/
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: installer/go.mod
+          cache-dependency-path: installer/go.sum
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "${unformatted}" ]; then
+            echo "These files need gofmt:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./...
+      - name: Build
+        run: go build ./...
