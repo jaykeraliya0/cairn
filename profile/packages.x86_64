@@ -1,5 +1,5 @@
 # Cairn live ISO package list — installed into the live environment only.
-# (The *target* system's list is scripts/installer/target-packages.x86_64.)
+# (The *target* system's list is installer/packages/target-packages.x86_64.)
 #
 # Forked from archiso's releng profile. Last synced with archiso 90:
 #   /usr/share/archiso/configs/releng/packages.x86_64
@@ -8,7 +8,21 @@
 #   diff <(sed '/^[[:blank:]]*#/d;/^[[:blank:]]*$/d' profile/packages.x86_64) \
 #        <(sort /usr/share/archiso/configs/releng/packages.x86_64)
 #
-# Deltas from releng 90: none — the set below is identical to upstream's.
+# Deltas from releng 90 — added by Cairn, keep these across a re-sync:
+#   cage, foot, ttf-jetbrains-mono, ttf-nerd-fonts-symbols-mono
+#     The installer's session. The kernel virtual console has sixteen colours
+#     and a font format that tops out at 512 bitmap glyphs, so a Nerd Font
+#     cannot be loaded onto it at all. cage (a Wayland kiosk) running foot (a
+#     truecolor terminal) gives the installer real colour and real icons;
+#     /usr/local/bin/cairn-session starts it and falls back to the bare
+#     console, where the installer switches to an ASCII glyph set.
+#
+#     The font is split deliberately: ttf-jetbrains-mono-nerd is the same
+#     typeface with the icons already patched in, but it installs 232 MiB of
+#     every weight and style. The plain face plus the symbols-only font is
+#     ~10 MiB for the identical result, with foot listing the symbols font as
+#     the fallback. The *target* system still gets the patched font — that is a
+#     desktop, not a live image.
 # When Cairn intentionally adds or drops a package, list it here with the
 # reason so the next re-sync doesn't silently undo the decision.
 #
@@ -30,6 +44,7 @@ bind
 bolt
 brltty
 btrfs-progs
+cage
 clonezilla
 cloud-init
 cryptsetup
@@ -49,6 +64,7 @@ ethtool
 exfatprogs
 f2fs-tools
 fatresize
+foot
 foot-terminfo
 fsarchiver
 ghostty-terminfo
@@ -133,6 +149,8 @@ testdisk
 tmux
 tpm2-tools
 tpm2-tss
+ttf-jetbrains-mono
+ttf-nerd-fonts-symbols-mono
 udftools
 usb_modeswitch
 usbmuxd

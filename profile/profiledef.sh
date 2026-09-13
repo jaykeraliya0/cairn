@@ -22,6 +22,9 @@ file_permissions=(
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/Installation_guide"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
+  ["/usr/local/bin/cairn-install"]="0:0:755"
+  ["/usr/local/bin/cairn-session"]="0:0:755"
   ["/etc/skel/.config/hypr/scripts/screenshot.sh"]="0:0:755"
+  ["/etc/skel/.config/hypr/scripts/clipboard.sh"]="0:0:755"
   ["/etc/skel/.config/waybar/scripts/powermenu.sh"]="0:0:755"
 )

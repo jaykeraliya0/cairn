@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Cairn live installer session. /root/.zlogin starts this on tty1.
+#
+# The installer runs graphically when there is a DRM device — a cage Wayland
+# kiosk running foot, which gives it 24-bit colour and Nerd Font glyphs — and on
+# the plain kernel console otherwise. The kernel VT cannot do either: it has
+# sixteen colours, and its font format holds at most 512 bitmap glyphs, so a
+# Nerd Font cannot be loaded onto it at all. Both paths run the same binary;
+# cairn-install picks an ASCII glyph set when it finds itself on a VT.
+#
+# The installer always starts one way or the other. A bare shell is the last
+# resort and is announced with instructions, never silent.
+set -uo pipefail
+
+log=/var/log/cairn-session.log
+# The TUI writes this when the chosen keyboard layout differs from the one cage
+# was started under; see relaunch_layout below.
+request=/tmp/cairn-xkb.request
+
+export COLORTERM=truecolor
+# The live session has no GPU driver yet, so wlroots has to render in software.
+export WLR_RENDERER=pixman
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+
+if ! command -v cairn-install >/dev/null 2>&1; then
+  echo "cairn: FATAL: cairn-install is missing from this image (corrupt ISO)." >&2
+  exit 0
+fi
+
+# panel_height prints the vertical resolution of the first connected display, or
+# 1080 when DRM tells us nothing. The first line of a connector's modes list is
+# its preferred mode, which is the one cage will drive.
+panel_height() {
+  local card status mode
+  for card in /sys/class/drm/card*-*; do
+    [[ -r "${card}/status" && -r "${card}/modes" ]] || continue
+    read -r status <"${card}/status" || continue
+    [[ "${status}" == connected ]] || continue
+    read -r mode <"${card}/modes" || continue
+    [[ "${mode}" =~ ^[0-9]+x([0-9]+) ]] || continue
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  done
+  echo 1080
+}
+
+# font_size keeps the text a constant physical size across panels.
+#
+# What the installer actually gets is a character grid, and a grid is pixels
+# divided by a font cell — but bubbletea only ever learns columns and rows. A
+# fixed point size therefore means the usable grid swings wildly with the panel:
+# readable at 1080p, unreadably small at 4K, and too few rows at 768p.
+font_size() {
+  local height=$1 pt
+  pt=$(( height * 14 / 1080 ))
+  (( pt < 9 )) && pt=9
+  (( pt > 28 )) && pt=28
+  echo "${pt}"
+}
+
+# run_graphical starts the kiosk. Returns non-zero when this machine cannot
+# have one, so the caller can fall through to the console.
+run_graphical() {
+  local layout=${CAIRN_XKB:-us} keymap=${CAIRN_KEYMAP:-us} pt cards=(/dev/dri/card*)
+
+  command -v cage >/dev/null 2>&1 && command -v foot >/dev/null 2>&1 || return 1
+  # cage needs a card node even under software rendering.
+  [[ -e "${cards[0]}" ]] || return 1
+
+  # Two families: the text face, then the symbols-only Nerd Font as the
+  # fallback fontconfig reaches for the icon codepoints the first one lacks.
+  pt=$(font_size "$(panel_height)")
+  echo "cairn: starting the graphical installer (${pt}pt, layout ${layout})." >>"${log}"
+
+  # -m last pins the kiosk to one output; cage otherwise stretches the window
+  # across the bounding box of every connected monitor.
+  env CAIRN_SESSION=graphical CAIRN_XKB="${layout}" CAIRN_KEYMAP="${keymap}" \
+    XKB_DEFAULT_LAYOUT="${layout}" \
+    cage -m last -- foot -o term=xterm-256color -o main.dpi-aware=no \
+    -f "JetBrains Mono:size=${pt},Symbols Nerd Font Mono:size=${pt}" \
+    -e cairn-install >>"${log}" 2>&1
+}
+
+# run_console is the fallback. cairn-install repaints the VT palette and picks a
+# console font itself once it sees it is on a VT.
+run_console() {
+  echo "cairn: no usable display; running on the console (16 colours, no icons)." >&2
+  CAIRN_SESSION=console cairn-install
+}
+
+# relaunch_layout consumes a pending keyboard-layout request.
+#
+# cage fixes its keyboard layout at launch and there is no way to change it from
+# inside the session. That matters for one answer in particular: the disk
+# encryption passphrase. Typed under the wrong layout it is stored as whatever
+# those keys mean in US, and the boot prompt — which uses the layout the user
+# actually chose — can then never unlock the disk. So when the keyboard step
+# picks something else, the TUI writes the request below and stops, and we start
+# cage again under the real layout.
+relaunch_layout() {
+  [[ -f "${request}" ]] || return 1
+  { IFS= read -r CAIRN_XKB; IFS= read -r CAIRN_KEYMAP; } <"${request}" || true
+  rm -f "${request}"
+  [[ -n "${CAIRN_XKB:-}" ]] || return 1
+  export CAIRN_XKB CAIRN_KEYMAP
+  echo "cairn: restarting the kiosk under keyboard layout ${CAIRN_XKB}." >>"${log}"
+  return 0
+}
+
+rm -f "${request}"
+
+# Bounded: a layout that somehow never matches must not loop forever.
+for _ in 1 2 3; do
+  if run_graphical; then
+    relaunch_layout || break
+    continue
+  fi
+  run_console
+  break
+done
+
+cat >&2 <<'EOF'
+
+cairn: the installer has exited; you are at a root shell.
+Run `cairn-install` to start it again.
+
+If the install FAILED, every command it ran and all of their output, errors
+included, is in /var/log/cairn-install.log. That is the file to read, or to
+share when asking for help.
+/var/log/cairn-session.log is only the kiosk's own output (cage, foot) and
+never holds the install error.
+
+EOF
