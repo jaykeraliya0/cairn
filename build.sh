@@ -7,8 +7,8 @@ WORK_DIR="${SCRIPT_DIR}/work"
 OUT_DIR="${SCRIPT_DIR}/out"
 
 # Strip comments and blank lines from a package list and trim whitespace.
-# Kept in step with cairn::read_package_list in scripts/lib/common.sh; build.sh
-# stays free of the installer libs, so the expression lives in both places.
+# Kept in step with parse() in installer/packages/embed.go, which does the same
+# thing to the same files at compile time.
 read_package_list() {
   sed '/^[[:blank:]]*#/d; s/#.*//; s/^[[:blank:]]*//; s/[[:blank:]]*$//; /^$/d' "$1"
 }
@@ -82,28 +82,205 @@ if [[ ! -f "${PROFILE_DIR}/profiledef.sh" ]]; then
   exit 1
 fi
 
+# The installer is a Go program, so the toolchain is a build dependency now.
+if ! command -v go >/dev/null 2>&1; then
+  echo "error: go not found, but the installer is written in Go." >&2
+  echo "Install it with: pacman -S go" >&2
+  exit 1
+fi
+
 if [[ ${EUID} -ne 0 ]]; then
   echo "error: must run as root (mkarchiso needs loop mounts). Try: sudo ./build.sh" >&2
   exit 1
 fi
 
 check_package_list "${PROFILE_DIR}/packages.x86_64"
-# The target list is pacstrapped later, on the user's machine, by the installer
-# on the finished ISO — so a stale name there fails far from here. Check it now.
-check_package_list "${SCRIPT_DIR}/scripts/installer/target-packages.x86_64"
+# The system image and the Nvidia side repository are built from these next.
+# Check them first, so a package that has left the repos fails here rather than
+# minutes into pacstrap.
+check_package_list "${SCRIPT_DIR}/installer/packages/target-packages.x86_64"
+check_package_list "${SCRIPT_DIR}/installer/packages/nvidia-packages.x86_64"
 
 rm -rf "${WORK_DIR}"
 mkdir -p "${OUT_DIR}"
 
-# scripts/ is the source of truth for the installer; stage a fresh copy into
-# the airootfs overlay so the ISO never ships stale installer code. The
-# installer/ and lib/ layout is copied as-is so relative sourcing inside
-# install.sh resolves the same way here as it does in scripts/.
-INSTALLER_DEST="${PROFILE_DIR}/airootfs/root/cairn-installer"
-rm -rf "${INSTALLER_DEST}"
-mkdir -p "${INSTALLER_DEST}"
-cp -r "${SCRIPT_DIR}/scripts/installer" "${SCRIPT_DIR}/scripts/lib" "${INSTALLER_DEST}/"
-chmod 755 "${INSTALLER_DEST}/installer/install.sh"
+# ── the system image ──────────────────────────────────────────────────────────
+# The installed system is built here, once, not on the user's machine. The
+# target package set is pacstrapped into a directory and packed into a squashfs
+# image that ships on the ISO; the installer extracts that image onto the disk
+# and then does only the per-machine setup. It is how Manjaro, EndeavourOS's
+# offline mode, Fedora and Ubuntu install: no package manager runs during the
+# install, so nothing is downloaded, verified or cached on the target, and every
+# install of a given ISO is the same system.
+#
+# Nvidia's drivers are the one thing kept out of the image — 2.4 GiB installed,
+# needed by a minority of machines — and ship in a small side repository that
+# the installer uses only when an Nvidia driver was chosen.
+CAIRN_SHARE="${PROFILE_DIR}/airootfs/usr/share/cairn"
+SYSTEM_IMAGE="${CAIRN_SHARE}/cairn-root.sfs"
+NVIDIA_REPO="${CAIRN_SHARE}/nvidia"
+TARGET_ROOT="${WORK_DIR}/target-root"
+# Survives a rebuild, so only what changed upstream is downloaded again.
+PACKAGE_CACHE="${SCRIPT_DIR}/.cache/offline-packages"
+
+# The profile's pacman.conf with the persistent cache added. Every pacman and
+# pacstrap call below uses it, so they all share one download cache.
+BUILD_PACMAN_CONF="$(mktemp)"
+trap 'rm -f "${BUILD_PACMAN_CONF}"' EXIT
+sed "/^\[options\]/a CacheDir = ${PACKAGE_CACHE}/" "${PROFILE_DIR}/pacman.conf" >"${BUILD_PACMAN_CONF}"
+
+build_system_image() {
+  local packages=()
+  mapfile -t packages < <(read_package_list "${SCRIPT_DIR}/installer/packages/target-packages.x86_64")
+
+  echo "==> installing ${#packages[@]} packages into the system image"
+  mkdir -p "${TARGET_ROOT}" "${PACKAGE_CACHE}"
+  # -c  use the config's CacheDir, so package archives land in the build cache
+  #     and not in the image's /var/cache/pacman/pkg
+  # -G  copy no keyring in: every installed system must generate its own
+  # -M  keep this machine's mirrorlist out: the image gets its own, below
+  pacstrap -C "${BUILD_PACMAN_CONF}" -c -G -M "${TARGET_ROOT}" "${packages[@]}"
+
+  echo "==> preparing the image"
+
+  # Cairn's desktop defaults. Baked in here, so the installed system's
+  # /etc/skel is already Cairn's and `useradd -m` copies it straight into the
+  # new user's home.
+  cp -a "${PROFILE_DIR}/airootfs/etc/skel/." "${TARGET_ROOT}/etc/skel/"
+  chown -R 0:0 "${TARGET_ROOT}/etc/skel"
+  # git does not reliably carry the exec bit, and these are run by keybinds.
+  find "${TARGET_ROOT}/etc/skel" -type f -path '*/scripts/*.sh' -exec chmod 0755 {} +
+
+  # A mirrorlist that works the first time the user runs `pacman -Syu`. The
+  # stock one from pacman-mirrorlist has every server commented out.
+  cat >"${TARGET_ROOT}/etc/pacman.d/mirrorlist" <<'EOF'
+# Arch Linux's GeoDNS mirror, which routes to a nearby mirror by itself.
+# Replace this with a hand-picked list, or generate one with reflector.
+Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+EOF
+
+  # Anything unique to one machine must not be in an image every machine gets.
+  # The installer creates each of these fresh, on the target, per install.
+  : >"${TARGET_ROOT}/etc/machine-id"                  # systemd-machine-id-setup
+  rm -rf "${TARGET_ROOT}/etc/pacman.d/gnupg"          # pacman-key --init
+  rm -f "${TARGET_ROOT}/var/lib/systemd/random-seed"
+
+  # Built on this machine, for this machine's hardware; the installer builds
+  # the real one with the target's mkinitcpio configuration.
+  rm -f "${TARGET_ROOT}"/boot/initramfs-*.img
+  rm -f "${TARGET_ROOT}/var/log/pacman.log"
+}
+
+build_nvidia_repo() {
+  local db="${TARGET_ROOT}/var/lib/pacman"
+  # The two flavours conflict, so each is resolved on its own. Keep in step
+  # with NvidiaPackages in installer/sys/gpu.go.
+  local flavours=("nvidia-open nvidia-utils egl-wayland"
+    "nvidia-open-dkms nvidia-utils egl-wayland linux-headers")
+  local wanted=() found=() names=() flavour file
+
+  rm -rf "${NVIDIA_REPO}"
+  mkdir -p "${NVIDIA_REPO}"
+
+  for flavour in "${flavours[@]}"; do
+    read -r -a names <<<"${flavour}"
+    # Resolved against the image's own package database, so only what the
+    # image lacks is downloaded and listed.
+    pacman -Sw --config "${BUILD_PACMAN_CONF}" --dbpath "${db}" --root "${TARGET_ROOT}" \
+      --logfile /dev/null --noconfirm -- "${names[@]}" >/dev/null
+    mapfile -t found < <(
+      pacman -Sp --config "${BUILD_PACMAN_CONF}" --dbpath "${db}" --root "${TARGET_ROOT}" \
+        --print-format '%f' -- "${names[@]}"
+    )
+    wanted+=("${found[@]}")
+  done
+  mapfile -t wanted < <(printf '%s\n' "${wanted[@]}" | sort -u)
+
+  for file in "${wanted[@]}"; do
+    # The installer verifies every package against its Arch signature, and a
+    # package without one fails there — on a user's machine, with no network
+    # to fetch it. Fail the build instead.
+    if [[ ! -f "${PACKAGE_CACHE}/${file}.sig" ]]; then
+      echo "error: ${file} has no signature in ${PACKAGE_CACHE}; the offline install could not verify it." >&2
+      exit 1
+    fi
+    for part in "${file}" "${file}.sig"; do
+      # Hardlink where the cache and the profile share a filesystem, so the
+      # packages are not stored twice; fall back to a copy when they do not.
+      ln "${PACKAGE_CACHE}/${part}" "${NVIDIA_REPO}/${part}" 2>/dev/null ||
+        cp "${PACKAGE_CACHE}/${part}" "${NVIDIA_REPO}/${part}"
+    done
+  done
+
+  # Pass the resolved package files, not a glob: *.pkg.tar.* also matches the
+  # .sig beside every package, which repo-add rejects as "not a package file".
+  local entries=("${wanted[@]/#/${NVIDIA_REPO}/}")
+  if ! repo-add --quiet "${NVIDIA_REPO}/cairn-nvidia.db.tar.zst" "${entries[@]}" >/dev/null; then
+    echo "error: repo-add failed to build the Nvidia repository." >&2
+    exit 1
+  fi
+
+  cat >"${NVIDIA_REPO}/pacman.conf" <<'EOF'
+# Used by the Cairn installer to install Nvidia's drivers with no network.
+[options]
+Architecture      = auto
+SigLevel          = Required DatabaseOptional
+LocalFileSigLevel = Optional
+# The repository doubles as the package cache: pacman finds every package
+# already in place and copies nothing into the new system.
+CacheDir          = /usr/share/cairn/nvidia/
+
+[cairn-nvidia]
+# Packages keep their Arch signatures; only this locally built index is not
+# signed.
+SigLevel = PackageRequired DatabaseNever
+Server   = file:///usr/share/cairn/nvidia
+EOF
+
+  echo "==> nvidia repository: ${#wanted[@]} packages, $(du -sh "${NVIDIA_REPO}" | cut -f1)"
+}
+
+pack_system_image() {
+  # The sync databases were needed only to resolve the Nvidia repository.
+  # Shipped, they would leave every install with a months-old package index
+  # that invites partial upgrades; without them, the first thing pacman asks
+  # for is a proper -Syu.
+  rm -rf "${TARGET_ROOT}/var/lib/pacman/sync"
+  rm -f "${TARGET_ROOT}/var/lib/pacman/db.lck"
+
+  echo "==> packing the system image"
+  mkdir -p "${CAIRN_SHARE}"
+  rm -f "${SYSTEM_IMAGE}"
+  mksquashfs "${TARGET_ROOT}" "${SYSTEM_IMAGE}" -noappend \
+    -comp zstd -Xcompression-level 15 -b 1M -no-progress
+  rm -rf "${TARGET_ROOT}"
+
+  echo "==> system image: $(du -h "${SYSTEM_IMAGE}" | cut -f1)"
+}
+
+# Earlier builds shipped the whole package closure as a repository here.
+rm -rf "${CAIRN_SHARE}/repo"
+build_system_image
+build_nvidia_repo
+pack_system_image
+
+# installer/ is the source of truth for the installer; compile it fresh into
+# the airootfs overlay so the ISO never ships a stale binary.
+INSTALLER_BIN="${PROFILE_DIR}/airootfs/usr/local/bin/cairn-install"
+mkdir -p "$(dirname "${INSTALLER_BIN}")"
+rm -f "${INSTALLER_BIN}"
+
+go_build=(go build -C "${SCRIPT_DIR}/installer" -trimpath -ldflags '-s -w' -o "${INSTALLER_BIN}" .)
+if [[ -n "${SUDO_USER:-}" ]]; then
+  # Build as the invoking user so the Go module cache lands in their home
+  # rather than becoming root-owned under /root.
+  sudo -u "${SUDO_USER}" -H "${go_build[@]}"
+else
+  "${go_build[@]}"
+fi
+# mkarchiso applies profiledef.sh's file_permissions to this path as well, but
+# a correct mode here keeps the overlay directly usable.
+chmod 755 "${INSTALLER_BIN}"
 
 mkarchiso -v -w "${WORK_DIR}" -o "${OUT_DIR}" "${PROFILE_DIR}"
 
