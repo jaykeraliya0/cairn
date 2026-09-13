@@ -1,5 +1,5 @@
 /* Cairn default waybar style -- Last of Us theme.
-   Colors match ~/.config/hypr/colors.conf; see the comment there. */
+   Colors match ~/.config/hypr/colors.lua; see the comment there. */
 
 * {
   /* Must be a family from target-packages.x86_64 -- quoted so GTK keeps

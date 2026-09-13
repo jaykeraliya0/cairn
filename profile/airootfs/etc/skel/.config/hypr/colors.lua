@@ -1,0 +1,31 @@
+-- Last of Us palette -- single source of truth for Hyprland's colors.
+--
+-- waybar/style.css, mako/config, rofi/config.rasi and alacritty/alacritty.toml
+-- hand-copy these same hex values; they are written in four other config
+-- languages and none of them can read this file. Keep all five in step.
+
+return {
+    bg_darker = "rgb(0a0a09)",
+    bg_dark   = "rgb(141311)",
+    bg        = "rgb(1a1815)",
+    bg_alt    = "rgb(23201e)",
+    bg_hl     = "rgb(352b21)",
+
+    fg     = "rgb(fffdf5)",
+    fg_dim = "rgb(a89e8d)",
+
+    accent      = "rgb(f7c594)",
+    accent_dark = "rgb(9d7f55)",
+
+    red    = "rgb(f06060)",
+    green  = "rgb(8a9a5b)",
+    yellow = "rgb(f7c594)",
+    blue   = "rgb(7d8f9c)",
+
+    active_border   = "rgba(f7c59480)",
+    inactive_border = "rgba(352b21ff)",
+
+    -- Shadows take a packed ARGB number rather than a colour string. This is
+    -- rgba(14131166) reordered: 0xAARRGGBB.
+    shadow = 0x66141311,
+}

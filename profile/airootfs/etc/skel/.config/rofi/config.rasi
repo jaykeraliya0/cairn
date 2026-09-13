@@ -1,5 +1,5 @@
 /* Cairn default rofi config -- Last of Us theme.
-   Colors match ~/.config/hypr/colors.conf; see the comment there. */
+   Colors match ~/.config/hypr/colors.lua; see the comment there. */
 
 * {
     /* Pango font description; the family must be in target-packages.x86_64. */

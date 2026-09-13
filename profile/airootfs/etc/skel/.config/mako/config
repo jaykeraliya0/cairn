@@ -1,6 +1,6 @@
 # Cairn default mako config -- Last of Us theme.
-# Colors match ~/.config/hypr/colors.conf; see the comment there.
-# Matched to hyprland.conf's decoration (rounding=3, border_size=1, gaps_out=4)
+# Colors match ~/.config/hypr/colors.lua; see the comment there.
+# Matched to hyprland.lua's decoration (rounding=3, border_size=1, gaps_out=4)
 # and waybar's height (30px).
 
 font=JetBrainsMono Nerd Font Propo 10

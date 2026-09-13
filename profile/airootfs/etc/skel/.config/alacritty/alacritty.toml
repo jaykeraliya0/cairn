@@ -1,5 +1,5 @@
 # Cairn default Alacritty config -- Last of Us theme.
-# Colors match ~/.config/hypr/colors.conf; see the comment there.
+# Colors match ~/.config/hypr/colors.lua; see the comment there.
 # UI apps (waybar/rofi/mako) use the "Outfit" display font -- terminal/editor
 # fonts are deliberately left as a plain monospace face instead.
 
