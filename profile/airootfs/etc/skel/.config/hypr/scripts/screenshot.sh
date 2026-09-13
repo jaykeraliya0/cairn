@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Screenshot helper: grim -> save to file + copy to clipboard.
-# Usage: screenshot.sh region|screen
+# Usage: screenshot.sh region|screen|copy
 
 set -euo pipefail
 
@@ -18,8 +18,13 @@ screen)
     grim "$OUTFILE"
     wl-copy < "$OUTFILE"
     ;;
+copy)
+    # Clipboard only -- nothing written to disk.
+    geom=$(slurp) || exit 0
+    grim -g "$geom" - | wl-copy
+    ;;
 *)
-    echo "usage: $0 region|screen" >&2
+    echo "usage: $0 region|screen|copy" >&2
     exit 1
     ;;
 esac

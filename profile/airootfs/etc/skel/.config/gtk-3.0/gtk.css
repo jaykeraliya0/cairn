@@ -1,0 +1,34 @@
+/* Cairn GTK 3 colors -- Last of Us palette.
+   Values match ~/.config/hypr/colors.lua; see the comment there.
+
+   settings.ini picks Adwaita-dark as the base theme; this overrides the named
+   colors it is built from, so GTK 3 applications come out in Cairn's warm
+   palette instead of Adwaita's neutral grey. */
+
+@define-color theme_bg_color            #1a1815;
+@define-color theme_base_color          #141311;
+@define-color theme_fg_color            #fffdf5;
+@define-color theme_text_color          #fffdf5;
+
+@define-color theme_selected_bg_color   #f7c594;
+@define-color theme_selected_fg_color   #1a1815;
+
+@define-color theme_unfocused_bg_color  #1a1815;
+@define-color theme_unfocused_base_color #141311;
+@define-color theme_unfocused_fg_color  #fffdf5;
+@define-color theme_unfocused_text_color #fffdf5;
+
+@define-color insensitive_bg_color      #23201e;
+@define-color insensitive_fg_color      #a89e8d;
+@define-color insensitive_base_color    #1a1815;
+
+@define-color borders                   #352b21;
+@define-color unfocused_borders         #23201e;
+
+@define-color warning_color             #f7c594;
+@define-color error_color               #f06060;
+@define-color success_color             #8a9a5b;
+
+@define-color wm_bg                     #23201e;
+@define-color headerbar_bg_color        #23201e;
+@define-color headerbar_fg_color        #fffdf5;

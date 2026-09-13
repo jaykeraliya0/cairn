@@ -1,0 +1,46 @@
+/* Cairn GTK 4 / libadwaita colors -- Last of Us palette.
+   Values match ~/.config/hypr/colors.lua; see the comment there.
+
+   libadwaita ignores gtk-theme-name entirely -- it has one built-in stylesheet
+   and only honours these named colors, so overriding them here is the only way
+   a GTK 4 application (Nautilus, file-roller, most new GNOME apps) follows the
+   palette rather than stock Adwaita dark. */
+
+@define-color window_bg_color     #1a1815;
+@define-color window_fg_color     #fffdf5;
+
+@define-color view_bg_color       #141311;
+@define-color view_fg_color       #fffdf5;
+
+@define-color headerbar_bg_color  #23201e;
+@define-color headerbar_fg_color  #fffdf5;
+@define-color headerbar_border_color #352b21;
+@define-color headerbar_backdrop_color #1a1815;
+
+@define-color sidebar_bg_color    #141311;
+@define-color sidebar_fg_color    #fffdf5;
+@define-color sidebar_backdrop_color #1a1815;
+@define-color sidebar_border_color #352b21;
+
+@define-color popover_bg_color    #23201e;
+@define-color popover_fg_color    #fffdf5;
+
+@define-color card_bg_color       #23201e;
+@define-color card_fg_color       #fffdf5;
+
+@define-color dialog_bg_color     #23201e;
+@define-color dialog_fg_color     #fffdf5;
+
+@define-color accent_bg_color     #f7c594;
+@define-color accent_fg_color     #1a1815;
+@define-color accent_color        #f7c594;
+
+@define-color destructive_bg_color #f06060;
+@define-color destructive_fg_color #1a1815;
+@define-color destructive_color    #f06060;
+
+@define-color success_color       #8a9a5b;
+@define-color warning_color       #f7c594;
+@define-color error_color         #f06060;
+
+@define-color borders             #352b21;
