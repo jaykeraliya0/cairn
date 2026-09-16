@@ -41,14 +41,19 @@ env:
   SF_KNOWN_HOSTS: 'frs.sourceforge.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOQD35Ujalhh+JJkPvMckDlhu4dS7WH6NsOJ15iGCJLC'
 
 jobs:
-  build:
+  # The cheap half of a build, as a gate. A bad version, a failing test or a
+  # package that has left the repos fails here in about a minute, rather than
+  # forty minutes into a pacstrap.
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      publish: ${{ steps.v.outputs.publish }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          # The release notes diff against the previous tag.
-          fetch-depth: 0
+      - uses: actions/checkout@v7
 
       - name: Resolve the version
         id: v
@@ -71,31 +76,90 @@ jobs:
           {
             echo "version=${version}"
             echo "tag=v${version}"
-            echo "iso=cairn-${version}-x86_64.iso"
             echo "publish=${publish}"
             # A version with a suffix (-rc1, -beta2) is not a final release.
             [[ "${version}" == *-* ]] && echo "prerelease=true" || echo "prerelease=false"
           } >>"${GITHUB_OUTPUT}"
 
-      - name: Stage the build on the large disk
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: installer/go.mod
+          cache-dependency-path: installer/go.sum
+
+      - name: Format, vet and test the installer
+        working-directory: installer
         run: |
           set -euo pipefail
-          # A build peaks around 17 GB. The runner's / has ~29 GB free, /mnt
-          # has ~66 GB, so the whole thing happens there. The tracked tree is
-          # under a megabyte, so this copy is free.
-          df -h / /mnt
-          sudo install -d -m 0755 /mnt/cairn
-          sudo cp -a "${GITHUB_WORKSPACE}/." /mnt/cairn/
+          unformatted="$(gofmt -l .)"
+          if [[ -n "${unformatted}" ]]; then
+            echo "These files need gofmt:" >&2
+            echo "${unformatted}" >&2
+            exit 1
+          fi
+          go vet ./...
+          go test ./...
+
+      - name: Resolve the package lists
+        run: |
+          set -euo pipefail
+          # build.sh's own preflight, without the build. Needs pacman and the
+          # profile's repos, so it runs in the same Arch container the build
+          # will use.
+          docker run --rm -v "${PWD}:/build" -w /build archlinux:latest \
+            bash -euo pipefail -c '
+              pacman -Sy --noconfirm --config profile/pacman.conf >/dev/null
+              ./build.sh --check-packages
+            '
+
+  build:
+    needs: check
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        # One entry, deliberately. archiso 90 has no aarch64 boot mode (only
+        # bios.syslinux, uefi-x64.* and uefi-ia32.*) and Arch Linux has no
+        # aarch64 repositories at all, so an ARM ISO is a port to Arch Linux
+        # ARM, not another line here. When that exists, it is another line here.
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Make room on the runner
+        run: |
+          set -euo pipefail
+          # A runner has one 72 GB disk with ~14 GB free, and a build needs
+          # around 20: work/ peaks near 9 GB, the ISO is 4, the system image
+          # 2.2, the package cache 2.5. (/mnt is a directory on that same disk,
+          # not the second disk it used to be.) Everything removed here is
+          # preinstalled tooling this build never touches.
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/powershell \
+            /usr/local/share/boost \
+            /usr/lib/google-cloud-sdk
+          sudo docker image prune --all --force >/dev/null
+          echo "cores: $(nproc)"
+          free -h
+          df -h /
 
       - name: Build the ISO
         env:
-          CAIRN_VERSION: ${{ steps.v.outputs.version }}
+          CAIRN_VERSION: ${{ needs.check.outputs.version }}
         run: |
           set -euo pipefail
           # build.sh needs root, pacstrap's bind mounts and Arch's own tooling,
           # so it runs in a privileged Arch container rather than on the runner.
           docker run --rm --privileged \
-            -v /mnt/cairn:/build -w /build \
+            -v "${PWD}:/build" -w /build \
             -e CAIRN_VERSION \
             archlinux:latest \
             bash -euo pipefail -c '
@@ -103,38 +167,53 @@ jobs:
               # packages signed since it was built.
               pacman -Sy --noconfirm --needed archlinux-keyring
               pacman -Su --noconfirm --needed archiso go
-              # Cheap insurance before an hour-long build. build.sh preflights
-              # the three package lists itself.
-              go test -C installer ./...
               ./build.sh
             '
-          sudo chown -R "$(id -u):$(id -g)" /mnt/cairn/out
-          df -h /mnt
+          sudo chown -R "$(id -u):$(id -g)" out
+          df -h /
 
-      - name: Checksum
-        id: sum
-        working-directory: /mnt/cairn/out
+      - name: Checksum and report
+        id: iso
+        working-directory: out
+        env:
+          ARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.check.outputs.version }}
         run: |
           set -euo pipefail
-          iso='${{ steps.v.outputs.iso }}'
+          iso="cairn-${VERSION}-${ARCH}.iso"
           [[ -f "${iso}" ]] || { echo "error: build produced no ${iso}" >&2; ls -l; exit 1; }
           sha256sum "${iso}" >sha256sums.txt
+
+          size="$(du -h "${iso}" | cut -f1)"
+          {
+            echo "iso=${iso}"
+            echo "arch=${ARCH}"
+            echo "size=${size}"
+          } >meta.env
+          echo "iso=${iso}" >>"${GITHUB_OUTPUT}"
+
           {
             echo "### ${iso}"
             echo
             echo "| | |"
             echo "|---|---|"
-            echo "| size | $(du -h "${iso}" | cut -f1) |"
+            echo "| size | ${size} |"
             echo "| sha256 | \`$(cut -d' ' -f1 sha256sums.txt)\` |"
+            echo
+            echo "| phase | time |"
+            echo "|---|---|"
+            awk -F'\t' '{ printf "| %s | %dm%02ds |\n", $1, $2 / 60, $2 % 60 }' build-timings.tsv
           } >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Upload the ISO to SourceForge
-        if: steps.v.outputs.publish == 'true'
-        working-directory: /mnt/cairn/out
+        if: needs.check.outputs.publish == 'true'
+        working-directory: out
         env:
           SF_USER: ${{ vars.SOURCEFORGE_USER }}
           SF_PROJECT: ${{ vars.SOURCEFORGE_PROJECT }}
           SF_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+          TAG: ${{ needs.check.outputs.tag }}
+          ISO: ${{ steps.iso.outputs.iso }}
         run: |
           set -euo pipefail
           : "${SF_USER:?set the SOURCEFORGE_USER repository variable}"
@@ -146,34 +225,77 @@ jobs:
           chmod 0600 ~/.ssh/sourceforge
           printf '%s\n' "${SF_KNOWN_HOSTS}" >~/.ssh/sourceforge_known_hosts
 
-          # rsync creates the release folder itself.
-          rsync -av --progress \
-            -e "ssh -i ${HOME}/.ssh/sourceforge -o UserKnownHostsFile=${HOME}/.ssh/sourceforge_known_hosts -o StrictHostKeyChecking=yes" \
-            '${{ steps.v.outputs.iso }}' sha256sums.txt \
-            "${SF_USER}@frs.sourceforge.net:/home/frs/project/${SF_PROJECT}/${{ steps.v.outputs.tag }}/"
+          # rsync creates the release folder itself. --partial --append-verify
+          # so a connection dropped at 90% of 4 GB resumes on the next attempt
+          # instead of starting the upload — and the build — again.
+          for attempt in 1 2 3; do
+            if rsync -av --partial --append-verify --timeout=300 \
+              -e "ssh -i ${HOME}/.ssh/sourceforge -o UserKnownHostsFile=${HOME}/.ssh/sourceforge_known_hosts -o StrictHostKeyChecking=yes" \
+              "${ISO}" sha256sums.txt \
+              "${SF_USER}@frs.sourceforge.net:/home/frs/project/${SF_PROJECT}/${TAG}/"; then
+              exit 0
+            fi
+            echo "::warning::rsync attempt ${attempt} failed" >&2
+            sleep $((attempt * 30))
+          done
+          echo "error: could not upload ${ISO} to SourceForge after 3 attempts" >&2
+          exit 1
 
-      - name: Create the GitHub release
-        if: steps.v.outputs.publish == 'true'
+      - name: Keep the checksums for the release
+        if: needs.check.outputs.publish == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          # Small text files only — the ISO itself never leaves the runner, it
+          # goes straight to SourceForge above.
+          name: release-${{ matrix.arch }}
+          path: |
+            out/sha256sums.txt
+            out/meta.env
+          retention-days: 7
+
+  # One release, however many architectures built. Nothing here is expensive,
+  # so a failed publish can be re-run on its own: the ISOs are already on
+  # SourceForge and the checksums are in the artifacts.
+  publish:
+    needs: [check, build]
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The release notes diff against the previous tag.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+
+      - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
           SF_PROJECT: ${{ vars.SOURCEFORGE_PROJECT }}
-          TAG: ${{ steps.v.outputs.tag }}
-          ISO: ${{ steps.v.outputs.iso }}
+          TAG: ${{ needs.check.outputs.tag }}
         run: |
           set -euo pipefail
-          url="https://downloads.sourceforge.net/project/${SF_PROJECT}/${TAG}/${ISO}"
+          cat dist/*/sha256sums.txt >sha256sums.txt
 
           notes="$(mktemp)"
           {
             echo "## Download"
             echo
-            echo "**[${ISO}](${url})** (~$(du -h "/mnt/cairn/out/${ISO}" | cut -f1))"
-            echo
+            for meta in dist/*/meta.env; do
+              iso="$(sed -n 's/^iso=//p' "${meta}")"
+              arch="$(sed -n 's/^arch=//p' "${meta}")"
+              size="$(sed -n 's/^size=//p' "${meta}")"
+              echo "**[${iso}](https://downloads.sourceforge.net/project/${SF_PROJECT}/${TAG}/${iso})** — ${size}, ${arch}"
+              echo
+            done
             echo "Hosted on [SourceForge](https://sourceforge.net/projects/${SF_PROJECT}/files/${TAG}/)"
             echo "because a GitHub release asset cannot exceed 2 GiB."
             echo
             echo '```'
-            echo "curl -LO ${url}"
             echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/sha256sums.txt"
             echo "sha256sum -c sha256sums.txt"
             echo '```'
@@ -181,7 +303,7 @@ jobs:
             echo "Write it to a USB stick — this erases the stick:"
             echo
             echo '```'
-            echo "sudo dd if=${ISO} of=/dev/sdX bs=4M status=progress oflag=sync"
+            echo "sudo dd if=${iso} of=/dev/sdX bs=4M status=progress oflag=sync"
             echo '```'
             echo
             echo "## Changes"
@@ -206,5 +328,5 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "Cairn ${TAG}" \
             --notes-file "${notes}" \
-            ${{ steps.v.outputs.prerelease == 'true' && '--prerelease' || '' }} \
-            "/mnt/cairn/out/sha256sums.txt"
+            ${{ needs.check.outputs.prerelease == 'true' && '--prerelease' || '' }} \
+            sha256sums.txt

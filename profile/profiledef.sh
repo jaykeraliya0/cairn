@@ -12,7 +12,12 @@ bootmodes=('bios.syslinux'
   'uefi.systemd-boot')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
-airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86' '-b' '1M' '-Xdict-size' '1M')
+# releng uses xz here. Two thirds of this airootfs is Cairn's own payload
+# (cairn-root.sfs and the Nvidia packages), already compressed, which xz spends
+# a long time failing to compress again: on a 2-core runner the xz pass was on
+# course for ~40 minutes. Measured on the OS half of the tree, 4 processors:
+# xz 168s/858M, zstd-19 73s/878M. -Xbcj is an xz-only filter and goes with it.
+airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '19' '-b' '1M')
 bootstrap_tarball_compression=('zstd' '-c' '-T0' '--auto-threads=logical' '--long' '-19')
 file_permissions=(
   ["/etc/shadow"]="0:0:400"

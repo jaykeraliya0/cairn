@@ -13,6 +13,31 @@ read_package_list() {
   sed '/^[[:blank:]]*#/d; s/#.*//; s/^[[:blank:]]*//; s/[[:blank:]]*$//; /^$/d' "$1"
 }
 
+# Phase timings. `phase <name>` closes the phase before it and opens a new one;
+# an empty name just closes the last. They are printed when the build finishes
+# and left in out/build-timings.tsv, which CI turns into a table — so an
+# argument about what to optimise is settled with numbers.
+PHASE_TIMINGS=()
+_phase_name=""
+_phase_start=0
+
+phase() {
+  if [[ -n "${_phase_name}" ]]; then
+    PHASE_TIMINGS+=("${_phase_name}"$'\t'"$((SECONDS - _phase_start))")
+  fi
+  _phase_name="$1"
+  _phase_start="${SECONDS}"
+}
+
+report_timings() {
+  phase ""
+  PHASE_TIMINGS+=("total"$'\t'"${SECONDS}")
+  printf '%s\n' "${PHASE_TIMINGS[@]}" >"${OUT_DIR}/build-timings.tsv"
+  echo "==> build phases"
+  printf '%s\n' "${PHASE_TIMINGS[@]}" |
+    awk -F'\t' '{ printf "    %-14s %3dm%02ds\n", $1, $2 / 60, $2 % 60 }'
+}
+
 # Print the names among "$@" that pacman cannot resolve, one per line. Uses the
 # profile's own pacman.conf so the repo set matches what the build will use.
 # An optional first argument selects an alternate sync database directory.
@@ -77,29 +102,50 @@ check_package_list() {
   exit 1
 }
 
+# --check-packages resolves the three package lists and stops. It is the cheap
+# half of a build, it needs neither root nor go, and CI runs it as a gate: a
+# package that has left the repos then fails in a minute rather than forty.
+CHECK_ONLY=0
+case "${1:-}" in
+  --check-packages) CHECK_ONLY=1 ;;
+  "") ;;
+  *)
+    echo "usage: ${0##*/} [--check-packages]" >&2
+    exit 1
+    ;;
+esac
+
 if [[ ! -f "${PROFILE_DIR}/profiledef.sh" ]]; then
   echo "error: ${PROFILE_DIR}/profiledef.sh not found." >&2
   exit 1
 fi
 
-# The installer is a Go program, so the toolchain is a build dependency now.
-if ! command -v go >/dev/null 2>&1; then
-  echo "error: go not found, but the installer is written in Go." >&2
-  echo "Install it with: pacman -S go" >&2
-  exit 1
+if [[ ${CHECK_ONLY} -eq 0 ]]; then
+  # The installer is a Go program, so the toolchain is a build dependency now.
+  if ! command -v go >/dev/null 2>&1; then
+    echo "error: go not found, but the installer is written in Go." >&2
+    echo "Install it with: pacman -S go" >&2
+    exit 1
+  fi
+
+  if [[ ${EUID} -ne 0 ]]; then
+    echo "error: must run as root (mkarchiso needs loop mounts). Try: sudo ./build.sh" >&2
+    exit 1
+  fi
 fi
 
-if [[ ${EUID} -ne 0 ]]; then
-  echo "error: must run as root (mkarchiso needs loop mounts). Try: sudo ./build.sh" >&2
-  exit 1
-fi
-
+phase preflight
 check_package_list "${PROFILE_DIR}/packages.x86_64"
 # The system image and the Nvidia side repository are built from these next.
 # Check them first, so a package that has left the repos fails here rather than
 # minutes into pacstrap.
 check_package_list "${SCRIPT_DIR}/installer/packages/target-packages.x86_64"
 check_package_list "${SCRIPT_DIR}/installer/packages/nvidia-packages.x86_64"
+
+if [[ ${CHECK_ONLY} -eq 1 ]]; then
+  echo "all three package lists resolve."
+  exit 0
+fi
 
 rm -rf "${WORK_DIR}"
 mkdir -p "${OUT_DIR}"
@@ -260,12 +306,16 @@ pack_system_image() {
 
 # Earlier builds shipped the whole package closure as a repository here.
 rm -rf "${CAIRN_SHARE}/repo"
+phase "system image"
 build_system_image
+phase "nvidia repo"
 build_nvidia_repo
+phase "pack image"
 pack_system_image
 
 # installer/ is the source of truth for the installer; compile it fresh into
 # the airootfs overlay so the ISO never ships a stale binary.
+phase installer
 INSTALLER_BIN="${PROFILE_DIR}/airootfs/usr/local/bin/cairn-install"
 mkdir -p "$(dirname "${INSTALLER_BIN}")"
 rm -f "${INSTALLER_BIN}"
@@ -282,6 +332,8 @@ fi
 # a correct mode here keeps the overlay directly usable.
 chmod 755 "${INSTALLER_BIN}"
 
+phase mkarchiso
 mkarchiso -v -w "${WORK_DIR}" -o "${OUT_DIR}" "${PROFILE_DIR}"
 
+report_timings
 echo "done. ISO written to ${OUT_DIR}/"
