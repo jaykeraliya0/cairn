@@ -4,11 +4,16 @@
 # itself is hosted on SourceForge (free, unlimited, and mirrored) and the
 # release here carries the checksums, the notes and the link.
 #
-# Needs, one time, in the repository settings:
-#   secret SOURCEFORGE_SSH_KEY  - private key of a keypair registered on the
-#                                 SourceForge account, no passphrase
-#   var    SOURCEFORGE_USER     - that account's username
-#   var    SOURCEFORGE_PROJECT  - the project's unix name
+# Needs, one time, three repository secrets (Settings -> Secrets and variables
+# -> Actions -> Secrets):
+#   SOURCEFORGE_SSH_KEY  - private key of a keypair registered on the
+#                          SourceForge account, no passphrase
+#   SOURCEFORGE_USER     - that account's username
+#   SOURCEFORGE_PROJECT  - the project's unix name
+# The last two are not really secret, but keeping all three together beats
+# splitting them across two settings pages. Actions masks them in the log, so
+# the rsync destination and the SourceForge links print as *** there — they are
+# written into the release notes correctly.
 name: release
 
 on:
@@ -77,8 +82,13 @@ jobs:
             echo "version=${version}"
             echo "tag=v${version}"
             echo "publish=${publish}"
-            # A version with a suffix (-rc1, -beta2) is not a final release.
-            [[ "${version}" == *-* ]] && echo "prerelease=true" || echo "prerelease=false"
+            # A 0.x version, or one with a suffix (-rc1, -beta2), is not a
+            # final release: GitHub badges it and does not serve it as Latest.
+            if [[ "${version}" == 0.* || "${version}" == *-* ]]; then
+              echo "prerelease=true"
+            else
+              echo "prerelease=false"
+            fi
           } >>"${GITHUB_OUTPUT}"
 
       - uses: actions/setup-go@v7
@@ -209,15 +219,15 @@ jobs:
         if: needs.check.outputs.publish == 'true'
         working-directory: out
         env:
-          SF_USER: ${{ vars.SOURCEFORGE_USER }}
-          SF_PROJECT: ${{ vars.SOURCEFORGE_PROJECT }}
+          SF_USER: ${{ secrets.SOURCEFORGE_USER }}
+          SF_PROJECT: ${{ secrets.SOURCEFORGE_PROJECT }}
           SF_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
           TAG: ${{ needs.check.outputs.tag }}
           ISO: ${{ steps.iso.outputs.iso }}
         run: |
           set -euo pipefail
-          : "${SF_USER:?set the SOURCEFORGE_USER repository variable}"
-          : "${SF_PROJECT:?set the SOURCEFORGE_PROJECT repository variable}"
+          : "${SF_USER:?set the SOURCEFORGE_USER repository secret}"
+          : "${SF_PROJECT:?set the SOURCEFORGE_PROJECT repository secret}"
           : "${SF_SSH_KEY:?set the SOURCEFORGE_SSH_KEY repository secret}"
 
           install -d -m 0700 ~/.ssh
@@ -275,7 +285,7 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-          SF_PROJECT: ${{ vars.SOURCEFORGE_PROJECT }}
+          SF_PROJECT: ${{ secrets.SOURCEFORGE_PROJECT }}
           TAG: ${{ needs.check.outputs.tag }}
         run: |
           set -euo pipefail
@@ -283,6 +293,14 @@ jobs:
 
           notes="$(mktemp)"
           {
+            # Hand-written notes for this tag, if there are any: what changed
+            # that a list of commit subjects cannot say. The generated sections
+            # follow it.
+            written=".github/release-notes/${TAG}.md"
+            if [[ -f "${written}" ]]; then
+              cat "${written}"
+              echo
+            fi
             echo "## Download"
             echo
             for meta in dist/*/meta.env; do
