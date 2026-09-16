@@ -1,4 +1,6 @@
 // -*- mode: jsonc -*-
+// Cairn default waybar config. Every icon is a Nerd Font glyph that renders
+// single-width in "JetBrainsMono Nerd Font Propo"; see style.css.
 {
     "layer": "top",
     "height": 30,
@@ -16,6 +18,7 @@
         "backlight",
         "pulseaudio",
         "battery",
+        "power-profiles-daemon",
         "bluetooth",
         "network",
         "network#speed",
@@ -24,7 +27,7 @@
         "custom/power"
     ],
     "custom/launcher": {
-        "format": "󰣇",
+        "format": "",
         "on-click": "exec rofi -show drun"
     },
     "hyprland/workspaces": {
@@ -33,7 +36,7 @@
         "format-icons": {
             // Workspaces past 10 have no digit mapped; a dot beats an
             // invisible, unclickable gap in the bar.
-            "default": "󰝥",
+            "default": "",
             "1": "1",
             "2": "2",
             "3": "3",
@@ -83,7 +86,8 @@
                 "󰕾"
             ]
         },
-        "on-click": "exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+        "on-click": "exec pavucontrol",
+        "on-click-right": "exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
     },
     "battery": {
         "interval": 60,
@@ -118,43 +122,54 @@
             "full": "󰂅"
         }
     },
+    "power-profiles-daemon": {
+        "format": "{icon}",
+        "tooltip-format": "Power profile: {profile}\nDriver: {driver}",
+        "tooltip": true,
+        "format-icons": {
+            "default": "",
+            "performance": "",
+            "balanced": "",
+            "power-saver": ""
+        }
+    },
     "custom/power": {
         "format": "󰐥",
         "tooltip": false,
         "on-click": "~/.config/waybar/scripts/powermenu.sh"
     },
     "bluetooth": {
-        "format": "󰂯",
+        "format": "",
         "format-disabled": "", // an empty format will hide the module
-        "format-connected": "󰂱 {num_connections}",
+        "format-connected": " {num_connections}",
         "tooltip-format": "{controller_alias}\t{controller_address}",
         "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{device_enumerate}",
         "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}"
     },
     "cpu": {
         "interval": 10,
-        "format": "󰻠  {usage}%",
+        "format": " {usage}%",
         "max-length": 10
     },
     "memory": {
         "interval": 10,
-        "format": "󰍛  {percentage}%",
+        "format": " {percentage}%",
         "tooltip-format": "{used:0.1f}G/{total:0.1f}G used"
     },
     "network": {
         "format": "",
         "format-wifi": "󰤨 {essid}",
-        "format-ethernet": "󰈀",
+        "format-ethernet": "",
         "format-disconnected": "󰤭",
         "tooltip-format": "{ifname} via {gwaddr} 󰺷",
         "tooltip-format-wifi": "{essid} ({signalStrength}%) 󰤨",
-        "tooltip-format-ethernet": "{ifname} ",
+        "tooltip-format-ethernet": "{ifname} ",
         "tooltip-format-disconnected": "Disconnected",
         "max-length": 50
     },
     "network#speed": {
         "interval": 1,
-        "format": "󰁅 {bandwidthDownBytes}  󰁝 {bandwidthUpBytes}",
+        "format": " {bandwidthDownBytes}   {bandwidthUpBytes}",
         "format-disconnected": "",
         "tooltip": false,
         "max-length": 50
