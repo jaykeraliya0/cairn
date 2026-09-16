@@ -124,6 +124,13 @@ window#waybar {
   color: @blue;
 }
 
+/* The adapter is off. The module still draws, so it can still be clicked to
+   turn it back on -- dimmed rather than hidden. Not @dark-6: that is a
+   background shade, and unreadable as a foreground. */
+#bluetooth.disabled {
+  color: alpha(@blue, 0.55);
+}
+
 #network {
   color: @teal;
 }
