@@ -1,0 +1,210 @@
+# Builds the ISO and publishes a release.
+#
+# The ISO is ~4 GB and a GitHub release asset is capped at 2 GiB, so the image
+# itself is hosted on SourceForge (free, unlimited, and mirrored) and the
+# release here carries the checksums, the notes and the link.
+#
+# Needs, one time, in the repository settings:
+#   secret SOURCEFORGE_SSH_KEY  - private key of a keypair registered on the
+#                                 SourceForge account, no passphrase
+#   var    SOURCEFORGE_USER     - that account's username
+#   var    SOURCEFORGE_PROJECT  - the project's unix name
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, without the leading v (e.g. 0.1.0-rc1)'
+        required: true
+        type: string
+      publish:
+        description: 'Upload the ISO and create the release. Off means a build-only dry run.'
+        type: boolean
+        default: false
+
+# One build at a time: each one downloads several GB and runs for the better
+# part of an hour.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  # Pinned rather than discovered with ssh-keyscan at run time. Verify against
+  # SourceForge's published fingerprint before changing:
+  # SHA256:209BDmH3jsRyO9UeGPPgLWPSegKmYCBIya0nR/AWWCY
+  SF_KNOWN_HOSTS: 'frs.sourceforge.net ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOQD35Ujalhh+JJkPvMckDlhu4dS7WH6NsOJ15iGCJLC'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release notes diff against the previous tag.
+          fetch-depth: 0
+
+      - name: Resolve the version
+        id: v
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" == tag ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            publish=true
+          else
+            version="${{ inputs.version }}"
+            publish="${{ inputs.publish }}"
+          fi
+
+          # mkarchiso puts this straight into the ISO's filename and metadata.
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "error: '${version}' is not a version of the form 1.2.3 or 1.2.3-rc1" >&2
+            exit 1
+          fi
+
+          {
+            echo "version=${version}"
+            echo "tag=v${version}"
+            echo "iso=cairn-${version}-x86_64.iso"
+            echo "publish=${publish}"
+            # A version with a suffix (-rc1, -beta2) is not a final release.
+            [[ "${version}" == *-* ]] && echo "prerelease=true" || echo "prerelease=false"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Stage the build on the large disk
+        run: |
+          set -euo pipefail
+          # A build peaks around 17 GB. The runner's / has ~29 GB free, /mnt
+          # has ~66 GB, so the whole thing happens there. The tracked tree is
+          # under a megabyte, so this copy is free.
+          df -h / /mnt
+          sudo install -d -m 0755 /mnt/cairn
+          sudo cp -a "${GITHUB_WORKSPACE}/." /mnt/cairn/
+
+      - name: Build the ISO
+        env:
+          CAIRN_VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          # build.sh needs root, pacstrap's bind mounts and Arch's own tooling,
+          # so it runs in a privileged Arch container rather than on the runner.
+          docker run --rm --privileged \
+            -v /mnt/cairn:/build -w /build \
+            -e CAIRN_VERSION \
+            archlinux:latest \
+            bash -euo pipefail -c '
+              # Refresh the keyring first: a months-old image keyring rejects
+              # packages signed since it was built.
+              pacman -Sy --noconfirm --needed archlinux-keyring
+              pacman -Su --noconfirm --needed archiso go
+              # Cheap insurance before an hour-long build. build.sh preflights
+              # the three package lists itself.
+              go test -C installer ./...
+              ./build.sh
+            '
+          sudo chown -R "$(id -u):$(id -g)" /mnt/cairn/out
+          df -h /mnt
+
+      - name: Checksum
+        id: sum
+        working-directory: /mnt/cairn/out
+        run: |
+          set -euo pipefail
+          iso='${{ steps.v.outputs.iso }}'
+          [[ -f "${iso}" ]] || { echo "error: build produced no ${iso}" >&2; ls -l; exit 1; }
+          sha256sum "${iso}" >sha256sums.txt
+          {
+            echo "### ${iso}"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| size | $(du -h "${iso}" | cut -f1) |"
+            echo "| sha256 | \`$(cut -d' ' -f1 sha256sums.txt)\` |"
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload the ISO to SourceForge
+        if: steps.v.outputs.publish == 'true'
+        working-directory: /mnt/cairn/out
+        env:
+          SF_USER: ${{ vars.SOURCEFORGE_USER }}
+          SF_PROJECT: ${{ vars.SOURCEFORGE_PROJECT }}
+          SF_SSH_KEY: ${{ secrets.SOURCEFORGE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          : "${SF_USER:?set the SOURCEFORGE_USER repository variable}"
+          : "${SF_PROJECT:?set the SOURCEFORGE_PROJECT repository variable}"
+          : "${SF_SSH_KEY:?set the SOURCEFORGE_SSH_KEY repository secret}"
+
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "${SF_SSH_KEY}" >~/.ssh/sourceforge
+          chmod 0600 ~/.ssh/sourceforge
+          printf '%s\n' "${SF_KNOWN_HOSTS}" >~/.ssh/sourceforge_known_hosts
+
+          # rsync creates the release folder itself.
+          rsync -av --progress \
+            -e "ssh -i ${HOME}/.ssh/sourceforge -o UserKnownHostsFile=${HOME}/.ssh/sourceforge_known_hosts -o StrictHostKeyChecking=yes" \
+            '${{ steps.v.outputs.iso }}' sha256sums.txt \
+            "${SF_USER}@frs.sourceforge.net:/home/frs/project/${SF_PROJECT}/${{ steps.v.outputs.tag }}/"
+
+      - name: Create the GitHub release
+        if: steps.v.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SF_PROJECT: ${{ vars.SOURCEFORGE_PROJECT }}
+          TAG: ${{ steps.v.outputs.tag }}
+          ISO: ${{ steps.v.outputs.iso }}
+        run: |
+          set -euo pipefail
+          url="https://downloads.sourceforge.net/project/${SF_PROJECT}/${TAG}/${ISO}"
+
+          notes="$(mktemp)"
+          {
+            echo "## Download"
+            echo
+            echo "**[${ISO}](${url})** (~$(du -h "/mnt/cairn/out/${ISO}" | cut -f1))"
+            echo
+            echo "Hosted on [SourceForge](https://sourceforge.net/projects/${SF_PROJECT}/files/${TAG}/)"
+            echo "because a GitHub release asset cannot exceed 2 GiB."
+            echo
+            echo '```'
+            echo "curl -LO ${url}"
+            echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/sha256sums.txt"
+            echo "sha256sum -c sha256sums.txt"
+            echo '```'
+            echo
+            echo "Write it to a USB stick — this erases the stick:"
+            echo
+            echo '```'
+            echo "sudo dd if=${ISO} of=/dev/sdX bs=4M status=progress oflag=sync"
+            echo '```'
+            echo
+            echo "## Changes"
+            echo
+            prev="$(git tag --sort=-creatordate | grep -vFx "${TAG}" | head -n1 || true)"
+            if [[ -n "${prev}" ]]; then
+              git log --no-merges --pretty='- %s' "${prev}..HEAD"
+              echo
+              echo "[Full diff](https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${TAG})"
+            else
+              echo "First release."
+            fi
+            echo
+            echo "---"
+            echo
+            echo "Built by \`.github/workflows/release.yml\` from \`${GITHUB_SHA}\`."
+          } >"${notes}"
+
+          # --target creates the tag when this was a manual run; on a tag push
+          # the tag is already what we are building.
+          gh release create "${TAG}" \
+            --target "${GITHUB_SHA}" \
+            --title "Cairn ${TAG}" \
+            --notes-file "${notes}" \
+            ${{ steps.v.outputs.prerelease == 'true' && '--prerelease' || '' }} \
+            "/mnt/cairn/out/sha256sums.txt"

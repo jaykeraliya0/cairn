@@ -5,7 +5,7 @@ iso_name="cairn"
 iso_label="CAIRN_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
 iso_publisher="Cairn Linux"
 iso_application="Cairn Development Build"
-iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
+iso_version="${CAIRN_VERSION:-$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)}"
 install_dir="arch"
 buildmodes=('iso')
 bootmodes=('bios.syslinux'

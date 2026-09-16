@@ -118,4 +118,25 @@ systemd-boot.
 
 ## Getting it
 
-Grab an ISO from the [releases page](../../releases), write it to a USB stick, and boot it.
+Every [release](../../releases) lists an ISO to download, a checksum to check it against, and what
+changed since the last one. The image itself lives on
+[SourceForge](https://sourceforge.net/projects/cairn-os/files/) rather than on the release page,
+because it is around 4 GB and GitHub will not take a release asset over 2 GiB.
+
+```sh
+curl -LO https://downloads.sourceforge.net/project/cairn-os/v0.1.0/cairn-0.1.0-x86_64.iso
+curl -LO https://github.com/jaykeraliya0/cairn/releases/download/v0.1.0/sha256sums.txt
+sha256sum -c sha256sums.txt
+```
+
+Then write it to a USB stick — this erases the stick, so check the device name twice:
+
+```sh
+sudo dd if=cairn-0.1.0-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync
+```
+
+Releases are built by GitHub Actions from the tag, in a clean Arch container, with `build.sh` — the
+same script I run locally. So the ISO on the release page is the tagged tree and nothing else.
+
+Or build it yourself: `sudo ./build.sh` on an Arch machine with `archiso` and `go` installed. It
+takes a while and several GB of free space, and the ISO lands in `out/`.
