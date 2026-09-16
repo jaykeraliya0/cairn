@@ -8,3 +8,14 @@ out/
 /profile/airootfs/usr/local/bin/cairn-install
 /profile/airootfs/usr/share/cairn/
 /.cache/
+
+# Local editor, tool and scratch files -- not part of the ISO.
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.cursorrules
+.aider*
+.claude/
+.cursor/
+.github/copilot-instructions.md
