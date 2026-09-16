@@ -192,14 +192,18 @@ jobs:
           set -euo pipefail
           iso="cairn-${VERSION}-${ARCH}.iso"
           [[ -f "${iso}" ]] || { echo "error: build produced no ${iso}" >&2; ls -l; exit 1; }
+          # This copy goes to SourceForge beside the ISO, under the plain name.
           sha256sum "${iso}" >sha256sums.txt
 
           size="$(du -h "${iso}" | cut -f1)"
+          # These two go to the publish job. download-artifact extracts every
+          # artifact into one directory, so their names carry the architecture.
+          cp sha256sums.txt "sha256sums-${ARCH}.txt"
           {
             echo "iso=${iso}"
             echo "arch=${ARCH}"
             echo "size=${size}"
-          } >meta.env
+          } >"meta-${ARCH}.env"
           echo "iso=${iso}" >>"${GITHUB_OUTPUT}"
 
           {
@@ -259,8 +263,8 @@ jobs:
           # goes straight to SourceForge above.
           name: release-${{ matrix.arch }}
           path: |
-            out/sha256sums.txt
-            out/meta.env
+            out/sha256sums-*.txt
+            out/meta-*.env
           retention-days: 7
 
   # One release, however many architectures built. Nothing here is expensive,
@@ -289,7 +293,16 @@ jobs:
           TAG: ${{ needs.check.outputs.tag }}
         run: |
           set -euo pipefail
-          cat dist/*/sha256sums.txt >sha256sums.txt
+          # Wherever download-artifact chose to put them: v4 gave each artifact
+          # a subdirectory, v8 extracts into the path itself.
+          mapfile -t sums < <(find dist -name 'sha256sums-*.txt' | sort)
+          mapfile -t metas < <(find dist -name 'meta-*.env' | sort)
+          if [[ ${#sums[@]} -eq 0 || ${#metas[@]} -eq 0 ]]; then
+            echo "error: the build artifacts carry no checksums:" >&2
+            find dist >&2
+            exit 1
+          fi
+          cat "${sums[@]}" >sha256sums.txt
 
           notes="$(mktemp)"
           {
@@ -303,7 +316,7 @@ jobs:
             fi
             echo "## Download"
             echo
-            for meta in dist/*/meta.env; do
+            for meta in "${metas[@]}"; do
               iso="$(sed -n 's/^iso=//p' "${meta}")"
               arch="$(sed -n 's/^arch=//p' "${meta}")"
               size="$(sed -n 's/^size=//p' "${meta}")"
@@ -313,9 +326,12 @@ jobs:
             echo "Hosted on [SourceForge](https://sourceforge.net/projects/${SF_PROJECT}/files/${TAG}/)"
             echo "because a GitHub release asset cannot exceed 2 GiB."
             echo
+            echo "Download the ISO, then check it against the checksums here"
+            echo "(\`--ignore-missing\` so it only checks the one you took):"
+            echo
             echo '```'
             echo "curl -LO https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/sha256sums.txt"
-            echo "sha256sum -c sha256sums.txt"
+            echo "sha256sum --ignore-missing -c sha256sums.txt"
             echo '```'
             echo
             echo "Write it to a USB stick — this erases the stick:"
