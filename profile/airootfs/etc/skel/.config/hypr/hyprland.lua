@@ -176,6 +176,17 @@ hl.window_rule({
     center = true,
 })
 
+-- The wifi and bluetooth managers, opened by ~/.config/hypr/scripts/tui.sh.
+-- Matched on the class it gives alacritty rather than on the title: a program
+-- running inside a terminal can rewrite the title, but not the app_id.
+hl.window_rule({
+    name   = "float-tui",
+    match  = { class = "^(cairn-tui)$" },
+    float  = true,
+    size   = "900 560",
+    center = true,
+})
+
 ---------------------
 ---- KEYBINDINGS ----
 ---------------------
@@ -196,6 +207,8 @@ hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("hyprlock"))
 hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd("makoctl dismiss -a"))
 hl.bind(mainMod .. " + V",         hl.dsp.exec_cmd("~/.config/hypr/scripts/clipboard.sh menu"))
 hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("pavucontrol"))
+hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("~/.config/hypr/scripts/tui.sh wifi"))
+hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("~/.config/hypr/scripts/tui.sh bluetooth"))
 
 -- Focus movement, and moving the window, with the arrow keys.
 for key, direction in pairs({ left = "left", right = "right", up = "up", down = "down" }) do

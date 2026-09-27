@@ -197,6 +197,19 @@ build_system_image() {
   # git does not reliably carry the exec bit, and these are run by keybinds.
   find "${TARGET_ROOT}/etc/skel" -type f -path '*/scripts/*.sh' -exec chmod 0755 {} +
 
+  # NetworkManager's Wi-Fi backend. The chroot step enables iwd.service next to
+  # NetworkManager.service, and NetworkManager defaults to wpa_supplicant --
+  # which leaves two supplicants contending for the same radio. This makes iwd
+  # NetworkManager's backend instead, so there is one manager of the device and
+  # impala, which talks to iwd directly, agrees with it. iwd's own
+  # EnableNetworkConfiguration already defaults to off, which is what
+  # NetworkManager needs, so iwd itself has nothing to configure here.
+  mkdir -p "${TARGET_ROOT}/etc/NetworkManager/conf.d"
+  cat >"${TARGET_ROOT}/etc/NetworkManager/conf.d/wifi_backend.conf" <<'EOF'
+[device]
+wifi.backend=iwd
+EOF
+
   # A mirrorlist that works the first time the user runs `pacman -Syu`. The
   # stock one from pacman-mirrorlist has every server commented out.
   cat >"${TARGET_ROOT}/etc/pacman.d/mirrorlist" <<'EOF'

@@ -16,6 +16,10 @@ func TestTarget(t *testing.T) {
 	for _, want := range []string{
 		"base", "linux", "linux-firmware", "mkinitcpio", "btrfs-progs", "hyprland", "sddm",
 		"intel-ucode", "amd-ucode", "cryptsetup", "mesa", "vulkan-intel", "vulkan-radeon",
+		// The wifi and bluetooth managers the default waybar clicks and
+		// Hyprland keybinds open. A bind whose program is not in the image is
+		// the quiet kind of broken: the window simply never appears.
+		"impala", "bluetui",
 	} {
 		if !contains(pkgs, want) {
 			t.Errorf("the target list is missing %q", want)

@@ -31,5 +31,6 @@ file_permissions=(
   ["/usr/local/bin/cairn-session"]="0:0:755"
   ["/etc/skel/.config/hypr/scripts/screenshot.sh"]="0:0:755"
   ["/etc/skel/.config/hypr/scripts/clipboard.sh"]="0:0:755"
+  ["/etc/skel/.config/hypr/scripts/tui.sh"]="0:0:755"
   ["/etc/skel/.config/waybar/scripts/powermenu.sh"]="0:0:755"
 )

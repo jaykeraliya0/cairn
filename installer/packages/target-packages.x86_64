@@ -20,9 +20,14 @@ btrfs-progs
 # Basics
 sudo
 
-# Networking (services enabled in the chroot step)
+# Networking (services enabled in the chroot step). NetworkManager owns IP
+# configuration, ethernet and VPNs; iwd is its Wi-Fi backend, selected by
+# /etc/NetworkManager/conf.d/wifi_backend.conf, which build.sh bakes into the
+# image. impala is the TUI in front of iwd, on SUPER+SHIFT+W and behind a click
+# on waybar's network module.
 iwd
 networkmanager
+impala
 
 # Desktop (Hyprland + login manager, service enabled in the chroot step)
 hyprland
@@ -93,10 +98,12 @@ gst-libav
 ffmpeg
 
 # Bluetooth. waybar already draws a bluetooth module; without these it has
-# nothing to talk to. The service is enabled in the chroot step.
+# nothing to talk to. The service is enabled in the chroot step. bluetui is the
+# manager behind SUPER+SHIFT+N and a click on that module -- bluez's D-Bus
+# policy allows any user, so it needs no group or polkit rule.
 bluez
 bluez-utils
-blueman
+bluetui
 
 # Secrets. gnome-keyring stores the passwords Firefox and any libsecret client
 # ask for; the chroot step wires it into SDDM's PAM stack so the login password
