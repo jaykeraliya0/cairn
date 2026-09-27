@@ -32,9 +32,15 @@ type (
 		index, total int
 		name         string
 	}
+	// percentMsg is a progress update from within the running step.
+	percentMsg int
 	// doneMsg reports the final outcome.
 	doneMsg struct{ err error }
 )
+
+// noPercent is the percent field's value when the running step reports no
+// progress of its own, which is every step but the two extractions.
+const noPercent = -1
 
 // installModel is the progress screen: the steps as a checklist, the current
 // one spinning with its latest line of output beneath it, and the full command
@@ -45,6 +51,9 @@ type installModel struct {
 	steps    []string
 	index    int
 	lastLine string
+	// percent is how far the running step has got, or noPercent. Only the
+	// image extraction reports it; see percentOf.
+	percent int
 
 	lines []string
 	// logOffset is how many rows the log view is scrolled up from the newest
@@ -80,6 +89,7 @@ func newInstallModel(steps []string, cancel func(), start chan struct{}) *instal
 		spinner: s,
 		steps:   steps,
 		index:   -1,
+		percent: noPercent,
 		cancel:  cancel,
 		start:   start,
 	}
@@ -137,9 +147,14 @@ func (m *installModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.appendLine(string(msg))
 		return m, nil
 
+	case percentMsg:
+		m.percent = int(msg)
+		return m, nil
+
 	case stepMsg:
 		m.index = msg.index
 		m.lastLine = ""
+		m.percent = noPercent
 		return m, nil
 
 	case doneMsg:
@@ -292,9 +307,19 @@ func (m *installModel) progress(width int) string {
 		done = 0
 	}
 
+	// A step's own progress counts as a fraction of one step, so the bar keeps
+	// moving through the image extraction — the one step that takes minutes.
+	scaled := done * 100
+	if !m.done && m.index >= 0 && m.percent >= 0 {
+		scaled += m.percent
+	}
+
 	percent := 0
 	if len(m.steps) > 0 {
-		percent = done * 100 / len(m.steps)
+		percent = scaled / len(m.steps)
+	}
+	if percent > 100 {
+		percent = 100
 	}
 
 	bar := width - 6
@@ -346,7 +371,11 @@ func (m *installModel) checklist(width, height int) []string {
 			rows = append(rows, styleError.Render(g.Failed)+" "+styleError.Render(name))
 		case i == m.index:
 			focus = len(rows)
-			rows = append(rows, m.spinner.View()+" "+styleText.Render(name))
+			row := m.spinner.View() + " " + styleText.Render(name)
+			if m.percent >= 0 {
+				row += "  " + styleLabel.Render(itoa(m.percent)+"%")
+			}
+			rows = append(rows, row)
 			if m.lastLine != "" {
 				rows = append(rows, "    "+styleFaint.Render(truncate(m.lastLine, width-4)))
 			}
@@ -440,6 +469,60 @@ func hardWrap(s string, width int) []string {
 	return append(out, string(runes))
 }
 
+// percentOf reports the progress percentage a line of output carries, or
+// noPercent when it carries none.
+//
+// `unsquashfs -percentage` — which apply uses for both extraction passes —
+// writes a bare integer per line rather than a progress bar: "1", "2", "3", up
+// to "100". Left as log lines they are a hundred rows of noise in the longest
+// step of an install, and the step's own output line, which shows the newest
+// line, becomes a naked number. Nothing else an install runs prints a bare
+// integer on a line of its own.
+func percentOf(line string) int {
+	s := strings.TrimSpace(line)
+	if s == "" || len(s) > 3 {
+		return noPercent
+	}
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return noPercent
+		}
+		n = n*10 + int(r-'0')
+	}
+	if n > 100 {
+		return noPercent
+	}
+	return n
+}
+
+// progressLog thins those percentages down to what the log *file* should keep.
+//
+// The screen shows progress live on the step's row, so the file needs only
+// enough to say how far an extraction got before something went wrong. A tenth
+// of them is that; a hundred is noise.
+type progressLog struct{ logged int }
+
+func newProgressLog() *progressLog { return &progressLog{logged: noPercent} }
+
+// worthLogging reports whether a percentage should reach the log file, and
+// records it when it should. A percentage lower than the last one is the second
+// unsquashfs pass starting over, not progress going backwards.
+func (p *progressLog) worthLogging(n int) bool {
+	if n < p.logged {
+		p.logged = noPercent
+	}
+	if p.logged >= 0 && n < 100 && n < p.logged+percentStride {
+		return false
+	}
+	p.logged = n
+	return true
+}
+
+// percentStride is how far the percentage has to move before the log file
+// records it again.
+const percentStride = 10
+
 // wireLog routes every line of the install — the installer's own step
 // headings, and every command it runs with all of that command's output — into
 // one sink.
@@ -479,7 +562,17 @@ func RunInstall(ctx context.Context, st *apply.State) (reboot bool, err error) {
 		m.logPath = InstallLogPath
 		defer logFile.Close()
 	}
+	progress := newProgressLog()
 	wireLog(st, func(line string) {
+		// A bare percentage is progress, not output: it moves the step's row
+		// and the bar, and reaches the file only every percentStride.
+		if n := percentOf(line); n >= 0 {
+			p.Send(percentMsg(n))
+			if progress.worthLogging(n) {
+				logFile.Write(itoa(n) + "%")
+			}
+			return
+		}
 		logFile.Write(line)
 		p.Send(logMsg(line))
 	})
